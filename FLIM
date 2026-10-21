@@ -1,0 +1,368 @@
+/*  FILM PRODUCTION MANAGEMENT SYSTEM 
+ *  Inheritance: single (Crew), multilevel (Person>Crew>Cinematographer), hierarchical,
+ *  multiple + hybrid (ActorDirector) with virtual base class, protected mode (Equipment)
+ *  Abstract class + pure virtual (Person, Asset), overriding, polymorphism, ::, this,
+ *  pointers to objects, constructors/copy ctor, static member, function overloading
+ *  (addExpense), operator overloading (Budget, Schedule), friend function + class,
+ *  exceptions, formatted + unformatted I/O, file handling.
+ *  Names are typed as ONE word (use _). Only the movie title may contain spaces.  */
+#include <iostream>
+#include <fstream>
+#include <iomanip>
+#include <string>
+using namespace std;
+const int MAX = 30;
+
+class MyError { public: string msg; MyError(string m) { msg = m; } };
+
+double num(string p) {                       // formatted input + validation
+    double x; cout << p;
+    if (!(cin >> x)) {
+        if (cin.eof()) throw 0;
+        cin.clear(); cin.ignore(1000, '\n');
+        throw MyError("Invalid input.");
+    }
+    if (x < 0) throw MyError("Negative value not allowed.");
+    return x;
+}
+string word(string p) { string s; cout << p; if (!(cin >> s)) throw 0; return s; }
+
+// ---------------------------------------------------------------- people
+class Person {                               // ABSTRACT class
+protected:
+    int id; string name;
+    static int count;
+public:
+    Person() { id = 0; name = "none"; count++; }
+    Person(int i, string n) { id = i; name = n; count++; }
+    Person(const Person &p) { id = p.id; name = p.name; count++; }
+    virtual ~Person() { count--; }
+    virtual string role() = 0;               // pure virtual functions
+    virtual double pay() = 0;
+    virtual void save(ofstream &o) = 0;
+    virtual void show() {
+        cout << left << setw(6) << id << setw(16) << name << setw(16) << role()
+             << right << setw(12) << fixed << setprecision(2) << pay() << endl;
+    }
+    virtual void read() { id = (int)num("ID: "); name = word("Name: "); }
+    int getId() { return id; }
+    string getName() { return name; }
+    Person& setName(string n) { this->name = n; return *this; }   // this pointer
+    static int getCount() { return count; }
+};
+int Person::count = 0;
+
+class Actor : virtual public Person {        // virtual base class
+protected:
+    double fee; string chr;
+public:
+    Actor() { fee = 0; chr = "none"; }
+    Actor(int i, string n, double f, string c) : Person(i, n) { fee = f; chr = c; }
+    string role() { return "Actor"; }
+    double pay() { return fee; }
+    void show() { Person::show(); cout << "      character: " << chr << endl; }
+    void read() { Person::read(); fee = num("Fee: "); chr = word("Character: "); }
+    void save(ofstream &o) { o << "A " << id << " " << name << " " << fee << " " << chr << endl; }
+};
+
+class Director : virtual public Person {
+protected:
+    double fee; int movies;
+public:
+    Director() { fee = 0; movies = 0; }
+    Director(int i, string n, double f, int m) : Person(i, n) { fee = f; movies = m; }
+    string role() { return "Director"; }
+    double pay() { return fee + 1000 * movies; }
+    void show() { Person::show(); cout << "      movies directed: " << movies << endl; }
+    void read() { Person::read(); fee = num("Fee: "); movies = (int)num("Movies directed: "); }
+    void save(ofstream &o) { o << "D " << id << " " << name << " " << fee << " " << movies << endl; }
+};
+
+class Crew : public Person {                 // single inheritance
+protected:
+    string dept; double wage; int days;
+public:
+    Crew() { dept = "none"; wage = 0; days = 0; }
+    Crew(int i, string n, string d, double w, int dy) : Person(i, n) { dept = d; wage = w; days = dy; }
+    string role() { return "Crew"; }
+    double pay() { return wage * days; }
+    void show() { Person::show(); cout << "      department: " << dept << endl; }
+    void read() { Person::read(); dept = word("Department: "); wage = num("Daily wage: "); days = (int)num("Days worked: "); }
+    void save(ofstream &o) { o << "C " << id << " " << name << " " << dept << " " << wage << " " << days << endl; }
+};
+
+class Cinematographer : public Crew {        // multilevel: Person > Crew > Cinematographer
+    string camera;
+public:
+    Cinematographer() { camera = "none"; }
+    Cinematographer(int i, string n, string d, double w, int dy, string c) : Crew(i, n, d, w, dy) { camera = c; }
+    string role() { return "Cinematographer"; }
+    double pay() { return Crew::pay() + 2000; }
+    string getCamera() { return camera; }
+    void show() { Crew::show(); cout << "      camera: " << camera << endl; }
+    void read() { Crew::read(); camera = word("Camera: "); }
+    void save(ofstream &o) { o << "X " << id << " " << name << " " << dept << " " << wage << " " << days << " " << camera << endl; }
+};
+
+class ActorDirector : public Actor, public Director {   // multiple + hybrid inheritance
+public:
+    ActorDirector() {}
+    ActorDirector(int i, string n, double af, string c, double df, int m)
+        : Person(i, n), Actor(i, n, af, c), Director(i, n, df, m) {}
+    string role() { return "Actor-Director"; }
+    double pay() { return Actor::pay() + Director::pay(); }
+    void show() { Person::show(); cout << "      character: " << chr << ", movies directed: " << movies << endl; }
+    void read() { Person::read(); Actor::fee = num("Acting fee: "); chr = word("Character: ");
+                  Director::fee = num("Directing fee: "); movies = (int)num("Movies directed: "); }
+    void save(ofstream &o) { o << "B " << id << " " << name << " " << Actor::fee << " " << chr
+                               << " " << Director::fee << " " << movies << endl; }
+};
+
+// ---------------------------------------------------------------- equipment
+class Asset {                                // abstract base
+protected:
+    string name; double cost;
+public:
+    Asset(string n = "none", double c = 0) { name = n; cost = c; }
+    virtual ~Asset() {}
+    virtual string kind() = 0;
+};
+class Equipment : protected Asset {          // protected inheritance: re-expose what we need
+public:
+    Equipment(string n, double rent, int days) : Asset(n, rent * days) {}
+    string kind() { return "Equipment"; }
+    string getName() { return name; }
+    double getCost() { return cost; }
+};
+
+// ---------------------------------------------------------------- budget + movie
+class Budget {
+    double total, spent;
+public:
+    Budget(double t = 0, double s = 0) { total = t; spent = s; }
+    double getTotal() { return total; }
+    double getSpent() { return spent; }
+    double left() { return total - spent; }
+    Budget& operator+=(double a) {           // operator overloading
+        if (spent + a > total) throw MyError("Budget exceeded!");
+        spent += a; return *this;
+    }
+    Budget operator+(Budget b) { return Budget(total + b.total, spent + b.spent); }
+    bool operator<(Budget b) { return left() < b.left(); }
+    friend ostream& operator<<(ostream &os, Budget b) {
+        return os << fixed << setprecision(2) << "Total " << b.total << " | Spent " << b.spent << " | Left " << b.left();
+    }
+};
+
+class Movie {
+    int id; string title; Budget budget; int cast[MAX]; int castCount;
+public:
+    Movie() { id = 0; castCount = 0; }
+    Movie(int i, string t, double b) : budget(b) { id = i; title = t; castCount = 0; }
+    // function overloading
+    void addExpense(double a) { budget += a; }
+    void addExpense(string cat, double a) { budget += a; cout << cat << ": Rs. " << a << " added.\n"; }
+    void addExpense(Equipment &e) { addExpense("Equipment " + e.getName(), e.getCost()); }
+    void assign(int pid) {
+        for (int i = 0; i < castCount; i++) if (cast[i] == pid) throw MyError("Already assigned.");
+        if (castCount >= MAX) throw MyError("Cast list full.");
+        cast[castCount++] = pid;
+    }
+    int getId() { return id; }
+    int getCastCount() { return castCount; }
+    int getCast(int i) { return cast[i]; }
+    Budget& getBudget() { return budget; }
+    void show() {
+        cout << left << setw(6) << id << setw(24) << title << right << setw(14) << budget.getTotal()
+             << setw(14) << budget.left() << setw(6) << castCount << endl;
+    }
+    void save(ofstream &o) {
+        o << id << " " << budget.getTotal() << " " << budget.getSpent() << " " << castCount;
+        for (int i = 0; i < castCount; i++) o << " " << cast[i];
+        o << endl << title << endl;
+    }
+    bool load(ifstream &in) {
+        double t, s;
+        if (!(in >> id >> t >> s >> castCount) || castCount > MAX) return false;
+        for (int i = 0; i < castCount; i++) in >> cast[i];
+        budget = Budget(t, s);
+        in.ignore(1000, '\n'); getline(in, title);
+        return true;
+    }
+    friend void report(Movie &m);            // friend function
+    friend class Auditor;                    // friend class
+};
+void report(Movie &m) { cout << "\n== " << m.title << " ==\n" << m.budget << "\nCast/crew assigned: " << m.castCount << endl; }
+class Auditor {
+public:
+    static void audit(Movie &m) {
+        cout << "\nAudit of " << m.title << ": spent " << m.budget.getSpent() << " of " << m.budget.getTotal() << endl;
+        if (m.budget.getSpent() >= 0.9 * m.budget.getTotal()) cout << "WARNING: 90% of budget used.\n";
+        else cout << "Budget is healthy. Cast/crew: " << m.castCount << endl;
+    }
+};
+
+class Schedule {
+    int movieId; string date, place, time;
+public:
+    Schedule() { movieId = 0; }
+    Schedule(int m, string d, string p, string t) { movieId = m; date = d; place = p; time = t; }
+    bool operator==(Schedule s) { return date == s.date && place == s.place; }
+    friend ostream& operator<<(ostream &os, Schedule s) {
+        return os << "Movie " << s.movieId << " | " << s.date << " | " << s.time << " | " << s.place;
+    }
+};
+
+// ---------------------------------------------------------------- data + functions
+Person *people[MAX]; int np = 0;
+Movie movies[MAX];   int nm = 0, nextId = 1;
+Schedule sched[MAX]; int ns = 0;
+
+Person* findPerson(int id) { for (int i = 0; i < np; i++) if (people[i]->getId() == id) return people[i]; return NULL; }
+Movie& pickMovie() {
+    if (nm == 0) throw MyError("Add a movie first.");
+    int id = (int)num("Movie ID: ");
+    for (int i = 0; i < nm; i++) if (movies[i].getId() == id) return movies[i];
+    throw MyError("Movie not found.");
+}
+void listPeople() {
+    cout << "\n" << left << setw(6) << "ID" << setw(16) << "Name" << setw(16) << "Role" << right << setw(12) << "Pay" << endl;
+    for (int i = 0; i < np; i++) people[i]->show();
+}
+void listMovies() {
+    cout << "\n" << left << setw(6) << "ID" << setw(24) << "Title" << right << setw(14) 
+    << "Budget" << setw(14) << "Left" << setw(6) << "Cast" << endl;
+    for (int i = 0; i < nm; i++) movies[i].show();
+}
+void addPerson() {
+    if (np >= MAX) throw MyError("People list full.");
+    int t = (int)num("1.Actor 2.Director 3.Crew 4.Cinematographer 5.Actor-Director: ");
+    Person *p;                               // base pointer to derived object
+    if (t == 1) p = new Actor(); else if (t == 2) p = new Director(); else if (t == 3) p = new Crew();
+    else if (t == 4) p = new Cinematographer(); else if (t == 5) p = new ActorDirector();
+    else throw MyError("Invalid type.");
+    try { p->read(); if (findPerson(p->getId())) throw MyError("ID already exists."); }
+    catch (...) { delete p; throw; }
+    people[np++] = p;
+    cout << "Added.\n";
+}
+void addMovie() {
+    if (nm >= MAX) throw MyError("Movie list full.");
+    string title; cin.ignore(1000, '\n');    // unformatted input
+    cout << "Title: "; getline(cin, title);
+    movies[nm++] = Movie(nextId++, title, num("Budget: "));
+}
+void addExpense() {
+    Movie &m = pickMovie();
+    int t = (int)num("1.Amount 2.Category+amount 3.Equipment: ");
+    if (t == 1) m.addExpense(num("Amount: "));
+    else if (t == 2) { string c = word("Category: "); m.addExpense(c, num("Amount: ")); }
+    else if (t == 3) { string n = word("Equipment: "); double r = num("Rent/day: "); Equipment e(n, r, (int)num("Days: ")); m.addExpense(e); }
+    else throw MyError("Invalid choice.");
+    cout << m.getBudget() << endl;
+}
+void schedule() {
+    Movie &m = pickMovie();
+    if (ns >= MAX) throw MyError("Schedule full.");
+    string place = word("Location: "), date = word("Date DD-MM-YYYY: "), time = word("Time: ");
+    if (date.length() != 10 || date[2] != '-' || date[5] != '-') throw MyError("Date must be DD-MM-YYYY.");
+    Schedule s(m.getId(), date, place, time);
+    for (int i = 0; i < ns; i++) if (sched[i] == s) throw MyError("Conflict: location already booked that day.");
+    sched[ns++] = s;
+    cout << "Scheduled.\n";
+}
+void payroll() {
+    Movie &m = pickMovie(); double total = 0;
+    for (int i = 0; i < m.getCastCount(); i++) {
+        Person *p = findPerson(m.getCast(i));
+        if (p) { p->show(); total += p->pay(); }      // polymorphic call
+    }
+    cout << "Total payroll: " << total << endl;
+    char c; cout << "Charge to budget? (y/n): "; cin >> ws; cin.get(c);   // unformatted input
+    if (c == 'y') { m.addExpense("Payroll", total); cout << m.getBudget() << endl; }
+}
+void saveAll() {
+    ofstream f1("people.txt"), f2("movies.txt");
+    if (!f1 || !f2) throw MyError("Cannot open file.");
+    f1 << fixed << setprecision(2); f2 << fixed << setprecision(2);
+    for (int i = 0; i < np; i++) people[i]->save(f1);
+    for (int i = 0; i < nm; i++) movies[i].save(f2);
+    cout << "Saved.\n";
+}
+void loadAll() {
+    ifstream f1("people.txt");
+    if (!f1) throw MyError("No saved data found.");
+    for (int i = 0; i < np; i++) delete people[i];
+    np = nm = 0; nextId = 1;
+    char t; int id, m, d; string n, a, b; double x, y;
+    while (np < MAX && f1 >> t >> id >> n) {
+        if (t == 'A') { f1 >> x >> a; people[np++] = new Actor(id, n, x, a); }
+        else if (t == 'D') { f1 >> x >> m; people[np++] = new Director(id, n, x, m); }
+        else if (t == 'C') { f1 >> a >> x >> d; people[np++] = new Crew(id, n, a, x, d); }
+        else if (t == 'X') { f1 >> a >> x >> d >> b; people[np++] = new Cinematographer(id, n, a, x, d, b); }
+        else if (t == 'B') { f1 >> x >> a >> y >> m; people[np++] = new ActorDirector(id, n, x, a, y, m); }
+    }
+    ifstream f2("movies.txt");
+    while (nm < MAX && movies[nm].load(f2)) { if (movies[nm].getId() >= nextId) nextId = movies[nm].getId() + 1; nm++; }
+    cout << "Loaded " << np << " people and " << nm << " movies.\n";
+}
+void demo() {
+    cout << "\n--- Copy ctor + this pointer ---\n";
+    Actor a1(900, "Aarav", 250000, "Raj"); Actor a2 = a1;
+    a2.setName("Temp").setName("Aarav_Copy");
+    cout << a1.getName() << " / " << a2.getName() << endl;
+    cout << "--- Hybrid inheritance (virtual base) ---\n";
+    ActorDirector ad(901, "Meera", 300000, "Anjali", 150000, 3); ad.show();
+    cout << "--- Base pointer vs derived pointer ---\n";
+    Cinematographer c(902, "Rohan", "Camera", 5000, 10, "ARRI");
+    Person *bp = &c; Cinematographer *dp = &c;
+    bp->show(); cout << "Camera (derived pointer only): " << dp->getCamera() << endl;
+    cout << "--- Operator overloading + exception ---\n";
+    Budget b1(100000), b2(50000), b3 = b1 + b2; b3 += 20000;
+    cout << b3 << "\nb1 < b3 ? " << (b1 < b3 ? "yes" : "no") << endl;
+    try { b1 += 500000; } catch (MyError e) { cout << "Caught: " << e.msg << endl; }
+    cout << "--- Pointer to objects ---\n";
+    Equipment *eq = new Equipment("Crane", 15000, 2);
+    cout << eq->getName() << " costs " << eq->getCost() << endl;
+    delete eq;
+    cout << "--- Unformatted output: "; for (const char *s = "FILM"; *s; s++) cout.put(*s);
+    cout << "\nPerson objects alive: " << Person::getCount() << endl;
+}
+
+int main() {
+    int ch = -1;
+    while (ch != 0) {
+        try {
+            cout << "\n==== FILM PRODUCTION MANAGEMENT ====\n"
+                 << " 1.Add person     2.List people   3.Add movie    4.List movies\n"
+                 << " 5.Assign cast    6.Add expense   7.Schedule     8.View schedule\n"
+                 << " 9.Payroll       10.Budget report 11.Audit      12.Save\n"
+                 << "13.Load          14.Demo           0.Exit\n";
+            ch = (int)num("Choice: ");
+            switch (ch) {
+                case 1: addPerson(); break;
+                case 2: listPeople(); break;
+                case 3: addMovie(); break;
+                case 4: listMovies(); break;
+                case 5: { Movie &m = pickMovie(); int pid = (int)num("Person ID: ");
+                          if (!findPerson(pid)) throw MyError("Person not found.");
+                          m.assign(pid); cout << "Assigned.\n"; break; }
+                case 6: addExpense(); break;
+                case 7: schedule(); break;
+                case 8: for (int i = 0; i < ns; i++) cout << sched[i] << endl; break;
+                case 9: payroll(); break;
+                case 10: report(pickMovie()); break;
+                case 11: Auditor::audit(pickMovie()); break;
+                case 12: saveAll(); break;
+                case 13: loadAll(); break;
+                case 14: demo(); break;
+                case 0: cout << "Goodbye!\n"; break;
+                default: cout << "Invalid choice.\n";
+            }
+        }
+        catch (MyError e) { cout << "[Error] " << e.msg << endl; }
+        catch (int) { cout << "\nInput ended.\n"; break; }
+    }
+    for (int i = 0; i < np; i++) delete people[i];
+    return 0;
+}
